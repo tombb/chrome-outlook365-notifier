@@ -1,0 +1,94 @@
+<html>
+	<head>
+		<title>Options for Outlook 365 Notifier</title>
+		<link rel="stylesheet" href="options.css">
+	</head>
+	<body>
+		<div id="main-content">
+			<div id="navbar-container">
+				<img src="outlook.ico" width="80" height="80" style="margin: 15px;">
+			</div>
+			<div id="mainview">
+				<div id="mainview-content">
+					<div id="page-container">
+						<div id="personal-page" class="page">
+							<h1>Outlook 365 Notifier Settings</h1>
+							<div class="displaytable">
+								<section>
+									<h3>URL</h3>
+									<div>
+										<div>
+											<span>
+												Outlook 365 Notifier will detect your Outlook inbox URL the first time you use it. <br>
+												However you can choose to set it manually too.
+											</span>
+										</div>
+										<div>
+											<div>
+												<label>
+													<input name="outlook_inbox_url" type="text" value="https://outlook.com/owa/&lt;your.company.com&gt;" size="50">
+												</label>
+												<button id="go-to-inbox-btn">Go!</button>
+											</div>
+										</div>
+									</div>
+								</section>
+								<section>
+									<h3>Desktop Notifications</h3>
+									<div>
+										<div>
+											<span>
+												Would you like to receive desktop notifications of new email?
+											</span>
+										</div>
+										<div>
+											<div class="radio">
+												<label>
+													<input type="radio" name="outlook_desktop_notifications_email" value="1" checked>
+													<span>Yes</span>
+												</label>
+											</div>
+											<div class="radio">
+												<label>
+													<input type="radio" name="outlook_desktop_notifications_email" value="0">
+													<span>No</span>
+												</label>
+											</div>
+										</div>
+									</div>
+								</section>
+								<section id="linux-full-version-section" style="display:none;">
+									<h3>Linux</h3>
+									<div>
+										<div>
+											<span>
+												Enable the full version of Outlook 365 on Linux?
+											</span>
+										</div>
+										<div>
+											<div class="radio">
+												<label>
+													<input type="radio" name="outlook_linux_full_version" value="1" checked>
+													<span>Full version</span>
+												</label>
+											</div>
+											<div class="checkbox">
+												<label>
+													<input type="radio" name="outlook_linux_full_version" value="0">
+													<span>Light version</span>
+												</label>
+											</div>
+										</div>
+									</div>
+								</section>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</body>
+	<script src="yui-min.js"></script>
+	<script src="outlook365-notifier.js"></script>
+	<script src="options.js"></script>
+</html>
