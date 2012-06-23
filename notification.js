@@ -1,7 +1,11 @@
 YUI().use('node-base', function (Y) {
 	Y.one('#txt-ctnr').setHTML(
 		'You have <b>' +
-		chrome.extension.getBackgroundPage().OutlookNotifier.numUnreadEmails + 
+		OutlookNotifier.numUnreadEmails + 
 		'</b> unread emails in your Outlook Inbox.'
-	);
+	).on('click', function () {
+		OutlookNotifier.openInbox();
+		OutlookNotifier.notification.cancel();
+	});
+	
 });

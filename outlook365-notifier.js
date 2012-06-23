@@ -1,31 +1,49 @@
-var OUTLOOK_HOME_URL = "https://hknprd0310.outlook.com/owa/";
-var OUTLOOK_LOGIN_URL = "https://login.microsoftonline.com/login.srf?wa=wsignin1.0&wreply=https:%2F%2Foutlook.com%2Fowa%2F&whr=infoxchange.net.au";
 var OutlookNotifier;
 
-YUI().use('io-base', 'node-base', function (Y) {
+YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 
-	OutlookNotifier = new function () {
+	OutlookNotifier = chrome.extension.getBackgroundPage().OutlookNotifier || new function () {
 
 		return {
 			/**
+			 * Template (Y.sub format) for the url of the Outlook 365 inbox
+			 * @type String
+			 */
+			INBOX_URL_TEMPLATE : 'https://outlook.com/owa/{realm}/',
+
+			/**
+			 * We only care about these domains
+			 * @type Array
+			 */
+			OUTLOOK_DOMAINS : [
+				'outlook.com',
+				'microsoftonline.com'
+			],
+
+			/**
 			 * Number of unread emails we know of. When this 
 			 * number increases, we'll send a desktop notification
+			 * @type Int|Null
 			 */ 
 			numUnreadEmails : null,
 
 			/**
 			 * Number of failed attempts to connect since
 			 * the last successful one.
+			 * @type Int
 			 */ 
 			numFailedConnections : 0,
 
 			/**
 			 * Timer object (returned by Y.later) for the periodic checks.
+			 * (Call cancel on this to stop the checks)
+			 * @type Object
 			 */ 
 			timer : null,
 
 			/**
 			 * Whether or not the user is signed in to Outlook 365.
+			 * @type Boolean
 			 */ 
 			connected: false,
 	  
@@ -34,34 +52,113 @@ YUI().use('io-base', 'node-base', function (Y) {
 			 * the necessary event listeners
 			 */ 
 			init : function () {
-				var 
-					me = this,
-					logoutPattern = OUTLOOK_LOGIN_URL.replace(
-						/^https:\/\/([^\/]+)\/.*$/,'$1'
-					);
+				var me = this;
 
 				this.drawIcon("?");
+
+				//
+				// First attempt to get number of unread emails (and show them in the
+				// icon).
+				//
 				this.getUnreadEmails();
 
+				//
+				// From now on check for new emails every minute
+				//
 				this.timer = Y.later(60000, this, this.getUnreadEmails, {}, true);
+
+				//
+				// Open inbox when the icon is clicked
+				//
 				chrome.browserAction.onClicked.addListener(function () {
 					me.openInbox();
 				});
+
+				//
+				// Update icon when logging in/out of Outlook
+				//
 				chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
-					console.log(logoutPattern);
-					if (
-						changeInfo.url && (
-							changeInfo.url.match(OUTLOOK_HOME_URL) ||
-							changeInfo.url.match(logoutPattern)
-						)
-					) {
-						me.timer.cancel();
-						me.timer = Y.later(60000, me, me.getUnreadEmails, {}, true);
-						Y.later(2000, me, me.getUnreadEmails, {}, false);
+					if (changeInfo.url) {
+						if (Y.Array.find(me.OUTLOOK_DOMAINS, function (e) {
+							return changeInfo.url.match(new RegExp('https?:\/\/.*\.' + e));
+						})) {
+							if (
+								changeInfo.url.match(/realm=([^&=]+)/) ||
+								changeInfo.url.match(/whr=([^&=]+)/)
+							) {
+								localStorage['outlook_inbox_url'] = Y.Lang.sub(
+									me.INBOX_URL_TEMPLATE,
+									{ realm : RegExp.$1 }
+								);
+							}
+							me.timer.cancel();
+							me.timer = Y.later(60000, me, me.getUnreadEmails, {}, true);
+							Y.later(2000, me, me.getUnreadEmails, {}, false);
+						}
 					}
 				});
-			},
 
+				//
+				// Modify request headers to get the full version on Chromium/Unix
+				// instead of the light version
+				//
+				if (navigator.platform.match(/Linux/i)) {
+					chrome.webRequest.onBeforeSendHeaders.addListener(
+						function(details) {
+							if (me.getLinuxFullVersionPreference()) {
+								for (var i = 0; i < details.requestHeaders.length; ++i) {
+									if (details.requestHeaders[i].name === 'User-Agent') {
+										details.requestHeaders[i].value = 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.56 Safari/536.5';
+										//'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:12.0) Gecko/20100101 Firefox/12.0';
+										break;
+									}
+								}
+								return {requestHeaders: details.requestHeaders};
+							}
+						},
+						{
+							urls: Y.Array.map(
+								me.OUTLOOK_DOMAINS, 
+								function (e) {  return "*://*." + e + "/*" }
+							)
+						},
+						["blocking", "requestHeaders"]
+					);
+				}
+				
+				//
+				// NOTE: Receiving messages from content scropt - can use this
+				// to update icon when user is opening emails etc.
+				//
+				//chrome.extension.onRequest.addListener(
+				//	function(request, sender, sendResponse) {
+				//		if (request.url) {
+				//			
+				//		}
+				//	}
+				//);
+			},
+	  
+			/**
+			 * NOTE: Sending messages from content scripts - can use
+			 * to update icon when user is opening emails etc.
+			 * 
+			detectInbox : function (tabId) {
+				if (!this.getInboxURL()) {
+					chrome.tabs.executeScript(tabId, {
+						code: "if (document.title.match('Outlook Web App')) { chrome.extension.sendRequest({url: document.location.href}) }"
+					});
+				}
+			},
+			**/
+
+			/**
+			 * Returns the URL of our outlook inbox
+			 */ 
+			getInboxURL : function () {
+				return localStorage['outlook_inbox_url'];
+			},
+	  
 			/**
 			 * Draws the browserAction icon for this extension.
 			 * @param {String} txt 
@@ -76,7 +173,11 @@ YUI().use('io-base', 'node-base', function (Y) {
 					
 				imageObj.onload = function() {
 					context.drawImage(imageObj, 0, 0, 19, 19);
-					/* 
+					/** 
+					 * Was using this to draw number initially - decided
+					 * to go for badge instead - keeping around as I might
+					 * use to draw different icon for calendar notifiactions
+					 * 
 					context.beginPath();
 					context.rect(8, 11, 10, 10);
 					context.fillStyle = 'white';
@@ -88,53 +189,58 @@ YUI().use('io-base', 'node-base', function (Y) {
 					context.shadowOffsetY = 1;
 					context.shadowBlur = 10;
 					context.fillText(txt, 10, 19);
-					*/
+					**/
 					var imageData = context.getImageData(0, 0, 19, 19);
 					chrome.browserAction.setIcon({
 						imageData: imageData
 					});
 					chrome.browserAction.setBadgeBackgroundColor({ color: badgeColor });
-					chrome.browserAction.setBadgeText({ text: txt});
+					chrome.browserAction.setBadgeText({ text: txt || "0"});
 					
 				};
 				imageObj.src = iconURL;
 			},
 
 			/**
-			 * Fetches the number of unread emails in the user's inbox
+			 * Fetches the number of unread emails in the user's inbox using
+			 * an XHR request. Updates the icon and launches a notification if
+			 * needed / applicable.
+			 * @returns {Void}
 			 */ 
-			getUnreadEmails : function () {
-				this.drawIcon("...");
-				Y.io(OUTLOOK_HOME_URL, { 
-					on: {
-						success: function (id, response) {
-							var 
-								tmpNode = Y.Node.create(response.responseText),
-								inboxAnchor = tmpNode.one('a[title="Inbox"]');
-								inboxSpan = tmpNode.one('span[fldrnm="Inbox"]');
-								inboxAnchorParent = (inboxAnchor || inboxSpan) ? (inboxAnchor || inboxSpan).ancestor('*', false) : null,
-								numEmails = inboxAnchorParent ? inboxAnchorParent.get('text').replace(/[^\d]/g,'') : '?';
+			getUnreadEmails : function (xhr) {
+				if (this.getInboxURL()) {
+					this.drawIcon("...");
+					Y.io(this.getInboxURL(), { 
+						on: {
+							success: function (id, response) {
+								var 
+									tmpNode = Y.Node.create(response.responseText),
+									inboxAnchor = tmpNode.one('a[title="Inbox"]');
+									inboxSpan = tmpNode.one('span[fldrnm="Inbox"]');
+									inboxAnchorParent = (inboxAnchor || inboxSpan) ? (inboxAnchor || inboxSpan).ancestor('*', false) : null,
+									numEmails = inboxAnchorParent ? inboxAnchorParent.get('text').replace(/[^\d]/g,'') : '?';
 
-							if (inboxAnchorParent) {
-								this.connected = true;
-								if (Y.Lang.isNull(this.numUnreadEmails)) {
-									this.numUnreadEmails = numEmails;
-								} else if (this.numUnreadEmails < numEmails) {
-									this.notify();
-									this.numUnreadEmails = numEmails;
+								if (inboxAnchorParent) {
+									this.connected = true;
+									if (Y.Lang.isNull(this.numUnreadEmails)) {
+										this.numUnreadEmails = numEmails;
+									} else if (this.numUnreadEmails < numEmails) {
+										this.notify();
+										this.numUnreadEmails = numEmails;
+									}
+									this.drawIcon(numEmails);
+									chrome.browserAction.setTitle({
+										title: "You have " + (numEmails || '0') + " unread emails in your Outlook inbox."
+									});
+								} else {
+									this.failureCallback(id, response);
 								}
-								this.drawIcon(numEmails);
-								chrome.browserAction.setTitle({
-									title: "You have " + numEmails + " unread emails in your Outlook inbox."
-								});
-							} else {
-								this.failureCallback(id, response);
-							}
-						},
-						failure: this.failureCallback
-					}, 
-					context : this
-				});
+							},
+							failure: this.failureCallback
+						}, 
+						context : this
+					});
+				}
 			},
 
 			/**
@@ -155,21 +261,44 @@ YUI().use('io-base', 'node-base', function (Y) {
 			},
 
 			/**
+			 * Returns the users desktop notification preference. True means
+			 * they want desktop notifications - False means they don't.
+			 * @returns Boolean
+			 */ 
+			getNotificationPreference : function () {
+				if (Y.Lang.isValue(localStorage['outlook_desktop_notifications_email'])) {
+					return localStorage['outlook_desktop_notifications_email'] === '1';
+				}
+				return true;
+			},
+
+			/**
+			 * Returns the user's full version preference. True mean they want to use 
+			 * the full version on Linux, false means they don't.
+			 * @returns Boolean
+			 */ 
+			getLinuxFullVersionPreference : function () {
+				if (Y.Lang.isValue(localStorage['outlook_linux_full_version'])) {
+					return localStorage['outlook_linux_full_version'] === '1';
+				}
+				return navigator.platform.match(/Linux/i);
+			},
+
+			/**
 			 * Shows a desktop notification to notify the user of new email.
 			 */ 
 			notify : function () {
-				var 
-					me = this,
-					notification = webkitNotifications.createHTMLNotification(
+				if (this.getNotificationPreference()) {
+					if (this.notification) {
+						this.notification.cancel();
+					}
+				
+					this.notification = webkitNotifications.createHTMLNotification(
 						"notification.html"
 					);
-				// Then show the notification.
-				console.log('notify??');
-				notification.onclick = function () {
-					me.openInbox();
-					this.cancel();
+
+					this.notification.show();
 				}
-				notification.show();
 			},
 
 			/**
@@ -178,30 +307,37 @@ YUI().use('io-base', 'node-base', function (Y) {
 			 */ 
 			openInbox : function () {
 				var me = this;
-				chrome.tabs.query({
-					url : OUTLOOK_HOME_URL,
-					windowId : chrome.windows.WINDOW_ID_CURRENT
-				}, function (tabs) {
-					var 
-						tabsLen = tabs.length,
-						active = false,
-						i;
-						
-					for (i=0; i < tabsLen; i++) {
-						if (tabs[i].active) {
-							active = true;
-							chrome.tabs.highlight({tabs : [tabs[i].id] }, function (w) {});
-							break;
+				if (!me.getInboxURL()) {
+					chrome.tabs.create({
+						url: '/options.html',
+						windowId : chrome.windows.WINDOW_ID_CURRENT
+					});
+				} else {
+					chrome.tabs.query({
+						url : this.getInboxURL(),
+						windowId : chrome.windows.WINDOW_ID_CURRENT
+					}, function (tabs) {
+						var 
+							tabsLen = tabs.length,
+							active = false,
+							i;
+							
+						for (i=0; i < tabsLen; i++) {
+							if (tabs[i].active) {
+								active = true;
+								break;
+							}
 						}
-					}
-					if (!active) {
-						chrome.tabs.create({
-							url: me.connected ? OUTLOOK_HOME_URL : OUTLOOK_LOGIN_URL,
-							windowId : chrome.windows.WINDOW_ID_CURRENT
-						}, this.getUnreadEmails);
-					}
-				});
+						if (!active) {
+							chrome.tabs.create({
+								url: me.getInboxURL(),
+								windowId : chrome.windows.WINDOW_ID_CURRENT
+							}, this.getUnreadEmails);
+						}
+					});
+				}
 			}
 		};
 	};
 });
+

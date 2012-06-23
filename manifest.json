@@ -1,18 +1,22 @@
 {
-  "name": "Outlook365 Notifier",
-  "version": "0.1",
-  "manifest_version": 2,
-  "description": "Displayes the number of unread emails in your Outlook 365 Inbox. Optionally gives you desktop notifications of new emails.",
-  "browser_action": {
-    "default_icon": "icon19x19-grey.png"
-  },
-  "background": {
-	"page": "background.html"
-  },
-  "permissions": [
-    "notifications",
-    "tabs",
-    "https://login.microsoftonline.com/",
-    "https://*.outlook.com/"
-  ]
+	"name": "Outlook365 Notifier",
+	"version": "0.1",
+	"manifest_version": 2,
+	"description": "Displays the number of unread emails in your Outlook 365 Inbox. Optional desktop notifications of new emails. Also enables full version of Outlook 365 on Linux.",
+	"browser_action": {
+		"default_icon": "icon19x19-grey.png" 
+	},
+	"background": {
+		"page": "background.html"
+	},
+	"options_page": "options.html",
+	"permissions": [
+		"cookies",
+		"webRequest",
+		"webRequestBlocking",
+		"notifications",
+		"tabs",
+		"*://login.microsoftonline.com/",
+		"*://*.outlook.com/"
+	]
 }
