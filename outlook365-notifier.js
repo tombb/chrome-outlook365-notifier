@@ -54,6 +54,37 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 			init : function () {
 				var me = this;
 
+				//
+				// Modify request headers to get the full version on Chromium/Unix
+				// instead of the light version
+				//
+				if (navigator.platform.match(/Linux/i)) {
+					
+					chrome.webRequest.onBeforeSendHeaders.addListener(
+						function(details) {
+							if (me.getLinuxFullVersionPreference()) {
+								for (var i = 0; i < details.requestHeaders.length; ++i) {
+									if (details.requestHeaders[i].name === 'User-Agent') {
+										console.log(details.requestHeaders[i].value);
+										console.log(details.url);
+										details.requestHeaders[i].value = 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/20.0.1132.47 Safari/536.5';
+										//'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:12.0) Gecko/20100101 Firefox/12.0';
+										break;
+									}
+								}
+								return {requestHeaders: details.requestHeaders};
+							}
+						},
+						{
+							urls: /*["<all_urls>"]*/ Y.Array.map(
+								me.OUTLOOK_DOMAINS, 
+								function (e) {  return "*://*." + e + "/*" }
+							)
+						},
+						["blocking", "requestHeaders"]
+					);
+				}
+				
 				this.drawIcon("?");
 
 				//
@@ -93,41 +124,14 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 							}
 							me.timer.cancel();
 							me.timer = Y.later(60000, me, me.getUnreadEmails, {}, true);
-							Y.later(2000, me, me.getUnreadEmails, {}, false);
+							Y.later(5000, me, me.getUnreadEmails, {}, false);
 						}
 					}
 				});
 
-				//
-				// Modify request headers to get the full version on Chromium/Unix
-				// instead of the light version
-				//
-				if (navigator.platform.match(/Linux/i)) {
-					chrome.webRequest.onBeforeSendHeaders.addListener(
-						function(details) {
-							if (me.getLinuxFullVersionPreference()) {
-								for (var i = 0; i < details.requestHeaders.length; ++i) {
-									if (details.requestHeaders[i].name === 'User-Agent') {
-										details.requestHeaders[i].value = 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/19.0.1084.56 Safari/536.5';
-										//'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:12.0) Gecko/20100101 Firefox/12.0';
-										break;
-									}
-								}
-								return {requestHeaders: details.requestHeaders};
-							}
-						},
-						{
-							urls: Y.Array.map(
-								me.OUTLOOK_DOMAINS, 
-								function (e) {  return "*://*." + e + "/*" }
-							)
-						},
-						["blocking", "requestHeaders"]
-					);
-				}
 				
 				//
-				// NOTE: Receiving messages from content scropt - can use this
+				// NOTE: Receiving messages from content script - can use this
 				// to update icon when user is opening emails etc.
 				//
 				//chrome.extension.onRequest.addListener(
@@ -215,8 +219,8 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 							success: function (id, response) {
 								var 
 									tmpNode = Y.Node.create(response.responseText),
-									inboxAnchor = tmpNode.one('a[title="Inbox"]');
-									inboxSpan = tmpNode.one('span[fldrnm="Inbox"]');
+									inboxAnchor = tmpNode.one('a[title="Inbox"]'),
+									inboxSpan = tmpNode.one('span[fldrnm="Inbox"]'),
 									inboxAnchorParent = (inboxAnchor || inboxSpan) ? (inboxAnchor || inboxSpan).ancestor('*', false) : null,
 									numEmails = inboxAnchorParent ? inboxAnchorParent.get('text').replace(/[^\d]/g,'') : '?';
 
@@ -235,6 +239,14 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 								} else {
 									this.failureCallback(id, response);
 								}
+								
+								//
+								// Clean up
+								//
+								tmpNode.destroy(true);
+								inboxAnchor && inboxAnchor.destroy(true);
+								inboxSpan && inboxSpan.destroy(true);
+								inboxAnchorParent.destroy(true);
 							},
 							failure: this.failureCallback
 						}, 

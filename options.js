@@ -57,17 +57,15 @@ YUI().use('event-base','node-style', 'array-extras', function (Y) {
 				}
 			})
 			.on('click', function (e) {
-				chrome.cookies.getAll({}, function (cookies) {
-					/*Y.Array.each(cookies, function(e) {
-							console.log(e);
-							var prefix = e.secure ? "https://" : "http://", domain;
-							domain = e.domain.replace(/^\./,'');
-							prefix += "";
-							chrome.cookies.remove({name : e.name, url: prefix + domain + e.path});
-
-					});*/
-				});
 				localStorage['outlook_linux_full_version'] = e.target.get('value');
+				chrome.cookies.getAll({}, function (cookies) {
+					Y.Array.each(cookies, function(e) {
+						var prefix = e.secure ? "https://" : "http://", domain;
+						domain = e.domain.replace(/^\./,'');
+						prefix += "";
+						chrome.cookies.remove({name : e.name, url: prefix + domain + e.path});
+					});
+				});
 			});
 	});
 

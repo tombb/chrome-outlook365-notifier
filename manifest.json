@@ -2,7 +2,7 @@
 	"name": "Outlook365 Notifier",
 	"version": "0.1",
 	"manifest_version": 2,
-	"description": "Displays the number of unread emails in your Outlook 365 Inbox. Optional desktop notifications of new emails. Also enables full version of Outlook 365 on Linux.",
+	"description": "Shows the number of unread emails in your Outlook 365 inbox. Also enables full version of the app for Linux users.",
 	"browser_action": {
 		"default_icon": "icon19x19-grey.png" 
 	},
