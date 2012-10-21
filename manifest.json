@@ -1,6 +1,6 @@
 {
 	"name": "Outlook365 Notifier",
-	"version": "0.2",
+	"version": "0.3",
 	"manifest_version": 2,
 	"description": "Shows the number of unread emails in your Outlook 365 inbox. Also enables full version of the app for Linux users.",
 	"browser_action": {
