@@ -65,10 +65,7 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 							if (me.getLinuxFullVersionPreference()) {
 								for (var i = 0; i < details.requestHeaders.length; ++i) {
 									if (details.requestHeaders[i].name === 'User-Agent') {
-										console.log(details.requestHeaders[i].value);
-										console.log(details.url);
-										details.requestHeaders[i].value = 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/20.0.1132.47 Safari/536.5';
-										//'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:12.0) Gecko/20100101 Firefox/12.0';
+										details.requestHeaders[i].value = 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/536.5 (KHTML, like Gecko) Chrome/22.0.1229.79 Safari/537.4';
 										break;
 									}
 								}
@@ -76,7 +73,7 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 							}
 						},
 						{
-							urls: /*["<all_urls>"]*/ Y.Array.map(
+							urls: Y.Array.map(
 								me.OUTLOOK_DOMAINS, 
 								function (e) {  return "*://*." + e + "/*" }
 							)
@@ -113,6 +110,9 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 						if (Y.Array.find(me.OUTLOOK_DOMAINS, function (e) {
 							return changeInfo.url.match(new RegExp('https?:\/\/.*\.' + e));
 						})) {
+							//
+							// Detect realm and store it using localStorage
+							//
 							if (
 								changeInfo.url.match(/realm=([^&=]+)/) ||
 								changeInfo.url.match(/whr=([^&=]+)/)
@@ -122,6 +122,7 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 									{ realm : RegExp.$1 }
 								);
 							}
+
 							me.timer.cancel();
 							me.timer = Y.later(60000, me, me.getUnreadEmails, {}, true);
 							Y.later(5000, me, me.getUnreadEmails, {}, false);
@@ -180,7 +181,7 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 					/** 
 					 * Was using this to draw number initially - decided
 					 * to go for badge instead - keeping around as I might
-					 * use to draw different icon for calendar notifiactions
+					 * use to draw different icon for calendar notifications
 					 * 
 					context.beginPath();
 					context.rect(8, 11, 10, 10);
@@ -229,12 +230,12 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 									if (Y.Lang.isNull(this.numUnreadEmails)) {
 										this.numUnreadEmails = numEmails;
 									} else if (this.numUnreadEmails < numEmails) {
-										this.notify();
 										this.numUnreadEmails = numEmails;
+										this.notify();
 									}
 									this.drawIcon(numEmails);
 									chrome.browserAction.setTitle({
-										title: "You have " + (numEmails || '0') + " unread emails in your Outlook inbox."
+										title: "You have " + (numEmails || '0') + " unread emails in your Outlook 365 inbox."
 									});
 								} else {
 									this.failureCallback(id, response);
@@ -246,7 +247,7 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 								tmpNode.destroy(true);
 								inboxAnchor && inboxAnchor.destroy(true);
 								inboxSpan && inboxSpan.destroy(true);
-								inboxAnchorParent.destroy(true);
+								inboxAnchorParent && inboxAnchorParent.destroy(true);
 							},
 							failure: this.failureCallback
 						}, 
@@ -268,7 +269,7 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 				}
 				this.drawIcon("?");
 				chrome.browserAction.setTitle({
-					title: "You are currently not signed in to Outlook. Click to sign in."
+					title: "You are currently not signed in to Outlook 365. Click to sign in."
 				});
 			},
 
@@ -304,11 +305,15 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 					if (this.notification) {
 						this.notification.cancel();
 					}
-				
-					this.notification = webkitNotifications.createHTMLNotification(
-						"notification.html"
+					this.notification = webkitNotifications.createNotification(
+						'outlook.ico',  // icon url - can be relative
+						'New mail',  // notification title
+						'You have ' +  this.numUnreadEmails + ' unread emails in your Outlook 365 Inbox.'
 					);
-
+					this.notification.onclick = function () {
+						OutlookNotifier.openInbox(); 
+						this.cancel();
+					};
 					this.notification.show();
 				}
 			},
@@ -318,35 +323,47 @@ YUI().use('io-base', 'node-base', 'array-extras', function (Y) {
 			 * currently selected tab.
 			 */ 
 			openInbox : function () {
-				var me = this;
+				var 
+					me = this,
+					active = false;
 				if (!me.getInboxURL()) {
 					chrome.tabs.create({
 						url: '/options.html',
 						windowId : chrome.windows.WINDOW_ID_CURRENT
 					});
 				} else {
-					chrome.tabs.query({
-						url : this.getInboxURL(),
-						windowId : chrome.windows.WINDOW_ID_CURRENT
-					}, function (tabs) {
-						var 
-							tabsLen = tabs.length,
-							active = false,
-							i;
-							
-						for (i=0; i < tabsLen; i++) {
-							if (tabs[i].active) {
-								active = true;
-								break;
-							}
+					Y.Array.map(
+						me.OUTLOOK_DOMAINS, 
+						function (e) {
+							var pattern = "*://*." + e + "/*";
+							chrome.tabs.query({
+								url : pattern
+							}, function (tabs) {
+								var 
+									tabsLen = tabs.length,
+									i;
+								console.log(tabs);
+								for (i=0; i < tabsLen; i++) {
+									if (!tabs[i].active) {
+										chrome.tabs.update(tabs[i].id, {active: true});
+									}
+									chrome.windows.update(tabs[i].windowId, {focused: true});
+									active = true;
+									break;
+								}
+								if (!active) {
+									active = true;
+									chrome.tabs.create({
+										url: me.getInboxURL(),
+										windowId : chrome.windows.WINDOW_ID_CURRENT
+									}, function (tab) {
+										me.getUnreadEmails();
+										chrome.windows.update(tab.windowId, {focused: true});
+									});
+								}
+							});
 						}
-						if (!active) {
-							chrome.tabs.create({
-								url: me.getInboxURL(),
-								windowId : chrome.windows.WINDOW_ID_CURRENT
-							}, this.getUnreadEmails);
-						}
-					});
+					);
 				}
 			}
 		};

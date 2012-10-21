@@ -18,5 +18,8 @@
 		"tabs",
 		"*://login.microsoftonline.com/",
 		"*://*.outlook.com/"
+	],
+	"web_accessible_resources" : [
+		"outlook.ico"
 	]
 }
