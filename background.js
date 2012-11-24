@@ -1,2 +1,1 @@
-OutlookNotifier.init();
-
+var NOTIFIER = new AppNotifier();
