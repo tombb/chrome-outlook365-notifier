@@ -23,7 +23,7 @@ YUI.add('base-notifier', function (Y) {
 		 * The title of your extension
 		 */ 
 		title : {
-			value : 'Outlook 365 Notifier'
+			value : null
 		},
 
 		/**
@@ -227,7 +227,9 @@ YUI.add('base-notifier', function (Y) {
 		 */ 
 		fetchNumber : function (xhr) {
 			if (this.get('url')) {
-				this.drawIcon("...");
+				if (Y.Lang.isNull(this._number)) {
+					this.drawIcon("...");
+				}
 				Y.io(this.get('url'), { 
 					on: {
 						success: this.onFetchNumberSuccess,
